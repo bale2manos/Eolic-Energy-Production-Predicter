@@ -67,6 +67,7 @@ print(f"Naturaleza del problema: {problem_type}")
 print("Columnas relevantes:")
 relevant_columns = [col for col in df.columns if col.endswith(".13") or col in ['datetime', 'energy']]
 df_relevant = df[relevant_columns]
+print("Número de columnas relevantes: ", len(df_relevant.columns))
 
 # Renombrado de columnas
 # Renombrar las columnas relevantes de manera más corta
@@ -98,6 +99,8 @@ df_relevant = df_relevant.rename(columns={
 })
 
 print(df_relevant.head(6))
+
+
 
 # TODO ¿¿Outliers??
 
