@@ -3,7 +3,6 @@ import time
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score
 import seaborn as sns  # visualisation
 from sklearn import metrics
 from sklearn import neighbors
@@ -12,7 +11,6 @@ import matplotlib.pyplot as plt  # visualisation
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.tree import DecisionTreeRegressor
 
 sns.set(color_codes=True)
 
@@ -127,22 +125,18 @@ df_relevant['hour'] = df_relevant['datetime'].dt.hour
 # Eliminar la columna original 'datetime'
 df_relevant = df_relevant.drop(columns=['datetime'])
 
-#print(df_relevant.head(6))
+print(df_relevant.head(6))
 
 #Debido a que nos encontramos frente a una serie temporal, según los consejos del profesorado
 #Hemos decidido usar TimeSeriesSplit
 
 #class sklearn.model_selection.TimeSeriesSplit(n_splits=5, *, max_train_size=None, test_size=None, gap=0)
 
-
-
-"KNN REGRESSOR"
-
 inicio = time.time()
-scores = []
+
 cv_outer = TimeSeriesSplit(n_splits=5)
 
-
+scores = []
 
 # TODO ahora mismo solo es outer?
 for train_index, test_index in cv_outer.split(df_relevant):
@@ -153,70 +147,27 @@ for train_index, test_index in cv_outer.split(df_relevant):
                   'knn__metric': ['euclidean', 'manhattan', 'minkowski']}"""
 
     pipe = Pipeline([
-        ('scaler', MinMaxScaler()), # TODO why MinMaxScaler?
+        ('scaler', StandardScaler()), # TODO why MinMaxScaler?
         ('knn', neighbors.KNeighborsRegressor())
     ])
 
     pipe.fit(X_train, y_train)
     y_test_pred = pipe.predict(X_test)
     rmse_knn = np.sqrt(metrics.mean_squared_error(y_test, y_test_pred))
-    #Calcular el error cuadrático medio (RMSE) es correcto para un problema de regresión.
 
     scores.append(rmse_knn)
 
 score = np.array(scores)
-print("All NEIGHBOR RMSE: ", score)
+print("All RMSE: ", score)
 print("Mean accuracy: ", score.mean(),"+/-", score.std())
 
 fin = time.time()
 tiempo_transcurrido = fin - inicio
 print("Tiempo transcurrido en KNN regressor:", tiempo_transcurrido, "segundos")
 
-"DECISION TREE REGRESSOR"
-inicio = time.time()
-scores = []
-cv_outer = TimeSeriesSplit(n_splits=5)
-for train_index, test_index in cv_outer.split(df_relevant):
-    X_train, X_test = df_relevant.drop(columns=['energy']).iloc[train_index], df_relevant.drop(columns=['energy']).iloc[test_index]
-    y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
-
-    """param_grid = {'knn__n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-                  'knn__metric': ['euclidean', 'manhattan', 'minkowski']}"""
-
-    pipe = Pipeline([
-        ('decision_tree', DecisionTreeRegressor())]
-    )
-
-    pipe.fit(X_train, y_train)
-    y_test_pred = pipe.predict(X_test)
-    rmse_knn = np.sqrt(metrics.mean_squared_error(y_test, y_test_pred))
-    #Calcular el error cuadrático medio (RMSE) es correcto para un problema de regresión.
-
-    scores.append(rmse_knn)
-
-score = np.array(scores)
-print("All DECISION TREE RMSE: ", score)
-print("Mean accuracy: ", score.mean(),"+/-", score.std())
-
-fin = time.time()
-tiempo_transcurrido = fin - inicio
-print("Tiempo transcurrido en DECISION TREE regressor:", tiempo_transcurrido, "segundos")
 
 
 
-
-
-#aa
-X2,y2 =df_relevant.drop(columns=['energy']) ,df_relevant['energy']
-X2_train, X2_test, y2_train, y2_test = train_test_split(X2,y2, test_size = 1/3, random_state = 42)
-inner = TimeSeriesSplit(n_splits=3)
-pipe2 = Pipeline([
-        ('scaler', MinMaxScaler()),
-        ('knn', neighbors.KNeighborsRegressor())
-    ])
-scores_minmax = -cross_val_score(pipe2,X2_train,y2_train, cv=inner,scoring="neg_root_mean_squared_error")
-
-print("hola",scores_minmax)
 
 """
 
@@ -258,4 +209,4 @@ def remove_outliers(df, outliers):
     df = df.drop(outliers, axis=0).reset_index(drop=True)
     return df
 
-df_relevant = remove_outliers(df_relevant, outliers)"""
+#df_relevant = remove_outliers(df_relevant, outliers)"""
