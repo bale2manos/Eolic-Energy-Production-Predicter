@@ -34,7 +34,7 @@ columns = df.columns
 missing_values = df.isnull().sum()
 print("Tipos de variables:")
 for i in range(len(variable_types)):
-    if variable_types[i] in ['float64', 'int64']:
+    if variable_types[i] in ['float64', 'int64', 'datetime64']: #TODO datetime
         print(columns[i], ": ", variable_types[i], "-> numérico. || Missing values: ", missing_values[i])
     else:
         print(columns[i], ": ", variable_types[i], "-> categórico. || Missing values: ", missing_values[i])
@@ -105,7 +105,7 @@ df_relevant = df_relevant.rename(columns={
     'energy': 'energy'
 })
 
-print(df_relevant.head(6))
+
 
 """
 Decidir cómo se va a llevar a cabo la evaluación outer (estimación de rendimiento futuro 
@@ -194,19 +194,11 @@ def detect_outliers(df, n, features):
 outliers = detect_outliers(df_relevant, 2, df_relevant.columns)
 print("Número de outliers: ", len(outliers))
 
-# Visualización de outliers
-def plot_outliers(df, features):
-    for col in features:
-        plt.figure()
-        sns.boxplot(x=df[col])
-        plt.title(col)
-        plt.show()
-
-plot_outliers(df_relevant, df_relevant.columns)
-
 # Eliminación de outliers
 def remove_outliers(df, outliers):
     df = df.drop(outliers, axis=0).reset_index(drop=True)
     return df
 
 df_relevant = remove_outliers(df_relevant, outliers)
+print("Número de instancias tras eliminar outliers: ", df_relevant.shape[0])
+"""
