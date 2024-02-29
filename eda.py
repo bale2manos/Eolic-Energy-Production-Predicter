@@ -3,6 +3,7 @@ import time
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
 import seaborn as sns  # visualisation
 from sklearn import metrics
 from sklearn import neighbors
@@ -200,6 +201,22 @@ print("Mean accuracy: ", score.mean(),"+/-", score.std())
 fin = time.time()
 tiempo_transcurrido = fin - inicio
 print("Tiempo transcurrido en DECISION TREE regressor:", tiempo_transcurrido, "segundos")
+
+
+
+
+
+#aa
+X2,y2 =df_relevant.drop(columns=['energy']) ,df_relevant['energy']
+X2_train, X2_test, y2_train, y2_test = train_test_split(X2,y2, test_size = 1/3, random_state = 42)
+inner = TimeSeriesSplit(n_splits=3)
+pipe2 = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('knn', neighbors.KNeighborsRegressor())
+    ])
+scores_minmax = -cross_val_score(pipe2,X2_train,y2_train, cv=inner,scoring="neg_root_mean_squared_error")
+
+print("hola",scores_minmax)
 
 """
 
