@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt  # visualisation
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
 
 sns.set(color_codes=True)
 
@@ -164,6 +165,36 @@ print("Mean accuracy: ", score.mean(),"+/-", score.std())
 fin = time.time()
 tiempo_transcurrido = fin - inicio
 print("Tiempo transcurrido en KNN regressor:", tiempo_transcurrido, "segundos")
+
+"DECISION TREE REGRESSOR"
+inicio = time.time()
+scores = []
+cv_outer = TimeSeriesSplit(n_splits=5)
+for train_index, test_index in cv_outer.split(df_relevant):
+    X_train, X_test = df_relevant.drop(columns=['energy']).iloc[train_index], df_relevant.drop(columns=['energy']).iloc[test_index]
+    y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
+
+    """param_grid = {'knn__n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                  'knn__metric': ['euclidean', 'manhattan', 'minkowski']}"""
+
+    pipe = Pipeline([
+        ('decision_tree', DecisionTreeRegressor())]
+    )
+
+    pipe.fit(X_train, y_train)
+    y_test_pred = pipe.predict(X_test)
+    rmse_knn = np.sqrt(metrics.mean_squared_error(y_test, y_test_pred))
+    #Calcular el error cuadrático medio (RMSE) es correcto para un problema de regresión.
+
+    scores.append(rmse_knn)
+
+score = np.array(scores)
+print("All DECISION TREE RMSE: ", score)
+print("Mean accuracy: ", score.mean(),"+/-", score.std())
+
+fin = time.time()
+tiempo_transcurrido = fin - inicio
+print("Tiempo transcurrido en DECISION TREE regressor:", tiempo_transcurrido, "segundos")
 
 
 
