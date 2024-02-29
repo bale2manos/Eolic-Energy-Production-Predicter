@@ -4,6 +4,7 @@ from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
 import seaborn as sns  # visualisation
+from sklearn.model_selection import train_test_split,cross_val_score,KFold
 from sklearn import metrics
 from sklearn import neighbors
 from sklearn.model_selection import TimeSeriesSplit
@@ -196,7 +197,17 @@ fin = time.time()
 tiempo_transcurrido = fin - inicio
 print("Tiempo transcurrido en DECISION TREE regressor:", tiempo_transcurrido, "segundos")
 
+"Cross validation"
+X,y = df_relevant.drop(columns=['energy']),df_relevant['energy']
+X_train, X_test,y_train,y_test = train_test_split(X,y,test_size=1/3,random_state=42)
+inner = KFold(n_splits=3,shuffle=True,random_state=42)
 
+pipe = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('knn', neighbors.KNeighborsRegressor())
+    ])
+scores = cross_val_score(pipe,X_train,y_train,cv = inner,scoring = 'neg_root_mean_squared_error')
+print("Con cross validation",-scores)
 
 
 
