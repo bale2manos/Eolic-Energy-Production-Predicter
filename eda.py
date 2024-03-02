@@ -4,13 +4,13 @@ from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
 import seaborn as sns  # visualisation
-from sklearn.model_selection import train_test_split,cross_val_score,KFold
+from sklearn.model_selection import train_test_split,cross_val_score,KFold,RandomizedSearchCV
 from sklearn import metrics
 from sklearn import neighbors
 from sklearn.model_selection import TimeSeriesSplit
 import matplotlib.pyplot as plt  # visualisation
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, RobustScaler
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 
@@ -109,12 +109,6 @@ df_relevant = df_relevant.rename(columns={
 
 print(df_relevant.head(6))
 
-"""
-Decidir cómo se va a llevar a cabo la evaluación outer (estimación de rendimiento futuro 
-/ evaluación de modelo) y la evaluación inner (para comparar diferentes alternativas y ajustar hiper
-parámetros). Decidir qué métrica(s) se van a usar. Justificar las decisiones.
-"""
-
 # Convertir 'datetime' a tipo datetime
 df_relevant['datetime'] = pd.to_datetime(df_relevant['datetime'])
 
@@ -129,8 +123,95 @@ df_relevant = df_relevant.drop(columns=['datetime'])
 
 print(df_relevant.head(6))
 
-#Debido a que nos encontramos frente a una serie temporal, según los consejos del profesorado
-#Hemos decidido usar TimeSeriesSplit
+"""
+2. Decidir cómo se va a llevar a cabo la evaluación outer (estimación de rendimiento futuro 
+/ evaluación de modelo) y la evaluación inner (para comparar diferentes alternativas y ajustar hiper
+parámetros). Decidir qué métrica(s) se van a usar. Justificar las decisiones.
+
+Debido a que nos encontramos frente a una serie temporal, según los consejos del profesorado
+Hemos decidido usar TimeSeriesSplit para llevar a cabo tanto la outer como la inner evaluation.
+La evaluación outer se utiliza para estimar el rendimiento futuro del modelo en datos no vistos, 
+mientras que la inner se enfoca en el ajuste de hiperparámetros y la comparación de modelos.
+
+La métrica que se va a usar es el rmse ya que nos parece la métrica más fácil de interpretar ya que está en las mismas unidades que la variable objetivo.
+
+"""
+
+
+"""
+3.Decidir, usando KNN el método de escalado más apropiado para este problema y usarlo 
+de aquí en adelante cuando sea necesario. 
+
+Para este ejercicio, probaremos con 3 métodos de escalado (standard, Minmax y Robust) y escogeremos el que tenga el rmse más bajo:
+Para la outer evaluation usaremos el timesplit con 5 folds y para la inner evaluation usaremos timesplit con 3 folds para asegurarnos de que no hemos 
+tenido suerte a la hora de dividir entre la parte de test y train en cada "time series fold" del "outer loop".
+Un problema puede ser el cómputo utilizado ya que la validación cruzada es más costosa
+TODO esto está bien explicado?
+
+No usaremos la outer evaluation para tomar una decisión. La mejor alternativa sobre qué método de escalado es mejor usar, la decidiremos en el inner loop.
+
+"""
+
+outer_cv = TimeSeriesSplit(n_splits=5)
+inner_cv = TimeSeriesSplit(n_splits=3)
+inner_rmse_means = [[], [], []]
+scores = {}
+#Primer alternativa: Standard:
+
+for train_index, test_index in outer_cv.split(df_relevant):
+    X_train, X_test = df_relevant.drop(columns=['energy']).iloc[train_index], df_relevant.drop(columns=['energy']).iloc[
+        test_index]
+    y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
+
+    pipeline = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('knn', neighbors.KNeighborsRegressor())
+    ])
+
+    pipeline2 = Pipeline([
+        ('scaler', StandardScaler()),
+        ('knn', neighbors.KNeighborsRegressor())
+    ])
+
+    pipeline3 = Pipeline([
+        ('scaler', RobustScaler()),
+        ('knn', neighbors.KNeighborsRegressor())
+    ])
+
+    inner_scores1 = cross_val_score(pipeline, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
+    inner_scores1_mean = -inner_scores1.mean()
+    inner_rmse_means[0].append(inner_scores1_mean)
+
+    inner_scores2 = cross_val_score(pipeline2, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
+    inner_scores2_mean = -inner_scores2.mean()
+    inner_rmse_means[1].append(inner_scores2_mean)
+
+    inner_scores3 = cross_val_score(pipeline3, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
+    inner_scores3_mean = -inner_scores3.mean()
+    inner_rmse_means[2].append(inner_scores3_mean)
+
+scores["MinMaxScaler"] = np.mean(inner_rmse_means[0])
+scores["StandardScaler"] = np.mean(inner_rmse_means[1])
+scores["RobustScaler"] = np.mean(inner_rmse_means[2])
+print("Para MinMaxScaler, la media de rmse es: ",scores["MinMaxScaler"])
+print("Para Standard, la media de rmse es: ",scores["StandardScaler"])
+print("Para Robust, la media de rmse es: ",scores["RobustScaler"])
+
+
+"""
+Como podemos observar en el print:
+Para MinMaxScaler, la media de rmse es:  553.7883988206586
+Para Standard, la media de rmse es:  487.38296471912935
+Para Robust, la media de rmse es:  487.43129008467366
+La media más baja para el rmse es la del Standard scaler por lo que usaremos ese escalador cuando usemos KNN regressor.
+"""
+
+
+
+
+
+
+
 
 #class sklearn.model_selection.TimeSeriesSplit(n_splits=5, *, max_train_size=None, test_size=None, gap=0)
 
