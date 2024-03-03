@@ -130,6 +130,7 @@ parámetros). Decidir qué métrica(s) se van a usar. Justificar las decisiones.
 
 Debido a que nos encontramos frente a una serie temporal, según los consejos del profesorado
 Hemos decidido usar TimeSeriesSplit para llevar a cabo tanto la outer como la inner evaluation.
+Para el outer se usarán 5 splits y para el inner 3.
 La evaluación outer se utiliza para estimar el rendimiento futuro del modelo en datos no vistos, 
 mientras que la inner se enfoca en el ajuste de hiperparámetros y la comparación de modelos.
 
