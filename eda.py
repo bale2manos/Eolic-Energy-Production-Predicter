@@ -118,6 +118,7 @@ df_relevant['month'] = df_relevant['datetime'].dt.month
 df_relevant['day'] = df_relevant['datetime'].dt.day
 df_relevant['hour'] = df_relevant['datetime'].dt.hour
 
+#TODO Esto está bien?
 # Eliminar la columna original 'datetime'
 df_relevant = df_relevant.drop(columns=['datetime'])
 
@@ -164,32 +165,33 @@ for train_index, test_index in outer_cv.split(df_relevant):
         test_index]
     y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
 
-    pipeline = Pipeline([
+    pipeline_min_max = Pipeline([
         ('scaler', MinMaxScaler()),
         ('knn', neighbors.KNeighborsRegressor())
     ])
 
-    pipeline2 = Pipeline([
+    pipeline_standard = Pipeline([
         ('scaler', StandardScaler()),
         ('knn', neighbors.KNeighborsRegressor())
     ])
 
-    pipeline3 = Pipeline([
+    pipeline_robust = Pipeline([
         ('scaler', RobustScaler()),
         ('knn', neighbors.KNeighborsRegressor())
     ])
 
-    inner_scores1 = cross_val_score(pipeline, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
+    inner_scores1 = cross_val_score(pipeline_min_max, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
     inner_scores1_mean = -inner_scores1.mean()
     inner_rmse_means[0].append(inner_scores1_mean)
 
-    inner_scores2 = cross_val_score(pipeline2, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
+    inner_scores2 = cross_val_score(pipeline_standard, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
     inner_scores2_mean = -inner_scores2.mean()
     inner_rmse_means[1].append(inner_scores2_mean)
 
-    inner_scores3 = cross_val_score(pipeline3, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
+    inner_scores3 = cross_val_score(pipeline_robust, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
     inner_scores3_mean = -inner_scores3.mean()
     inner_rmse_means[2].append(inner_scores3_mean)
+
 
 scores["MinMaxScaler"] = np.mean(inner_rmse_means[0])
 scores["StandardScaler"] = np.mean(inner_rmse_means[1])
@@ -199,6 +201,11 @@ print("Para Standard, la media de rmse es: ",scores["StandardScaler"])
 print("Para Robust, la media de rmse es: ",scores["RobustScaler"])
 
 
+
+
+
+
+
 """
 Como podemos observar en el print:
 Para MinMaxScaler, la media de rmse es:  553.7883988206586
@@ -206,6 +213,91 @@ Para Standard, la media de rmse es:  487.38296471912935
 Para Robust, la media de rmse es:  487.43129008467366
 La media más baja para el rmse es la del Standard scaler por lo que usaremos ese escalador cuando usemos KNN regressor.
 """
+
+#TODO Qué diferencia hay entre cross validation y random o grid search CV
+
+"""
+Para nosotros inner Cross validation es sacar la media del scoring elegido.
+Grid o random search además de la media, te da la mejor config de hiperparámetros.
+"""
+
+"""
+4. A continuación, se considerarán estos métodos: KNN, árboles de regresión, regresión 
+lineal (la normal y al menos, la variante Lasso) y SVM: 
+a. Se evaluarán dichos modelos con sus hiperparámetros por omisión. También se medirán los 
+tiempos que tarda el entrenamiento. 
+b. Después, se ajustarán los hiperparámetros más importantes de cada método y se obtendrá 
+su evaluación. Medir tiempos del entrenamiento, ahora con HPO. 
+c. 
+Obtener algunas conclusiones, tales como: ¿cuál es el mejor método? ¿Cuál de los métodos 
+básicos de aprendizaje automático es más rápido? ¿Los resultados son mejores que los 
+regresores triviales/naive/dummy? ¿El ajuste de hiperparámetros mejora con respecto a los 
+valores por omisión? ¿Hay algún equilibrio entre tiempo de ejecución y mejora de 
+resultados? ¿Es posible extraer de alguna técnica qué atributos son más relevantes? etc. 
+
+"""
+
+
+
+
+"""
+4.a
+Usamos un for loop externo. Dentro, creamos una pipeline como modelo por cada uno 
+de los métodos (KNN, decision tree regresor...). De estos, hacemos una "inner" cross validation
+para sacar una media de cada uno de los outer folds y luego hacemos una media de 5 de cada media que ha salido
+de los outer folds.
+De todas estas medias, las evaluamos y escogemos el modelo cuya media sea la mejor.
+Todo esto con el escalador standard.
+
+4.b 
+Hacemos un outer loop y dentro usamos gridsearch con un param_grid ya definido y un inner también con 
+timeseries split para obtener el modelo con los mejores hiperparámetros. 
+Del modelo que salga de outer fold, sacamos el rmse de ese outer fold negative_mse = regr.best_score_
+luego hacemos una media de las (k outer folds) y con esa media evaluamos todos los modelos con
+ajuste de hiperparámetros
+"""
+
+
+
+
+"""KNN por omisión"""
+X,y = df_relevant.drop(columns=['energy']),df_relevant['energy']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1/3, random_state=6) # TODO TimeSeries??
+pipeline_standard = Pipeline([
+        ('scaler', StandardScaler()),
+        ('knn', neighbors.KNeighborsRegressor())
+    ])
+pipeline_standard.fit(X_train, y_train)
+y_pred = pipeline_standard.predict(X_test)
+outer_score = metrics.mean_squared_error(y_test, y_pred)
+print("Estimación de rendimiento de KNN con RobustScaler", outer_score)
+
+# MODELO FINAL
+modelo_final = pipeline_standard.fit(X,y)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
