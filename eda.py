@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import numpy as np
 import seaborn as sns  # visualisation
-from sklearn.model_selection import train_test_split,cross_val_score,KFold,RandomizedSearchCV
+from sklearn.model_selection import train_test_split,cross_val_score,KFold,RandomizedSearchCV,GridSearchCV
 from sklearn import metrics
 from sklearn import neighbors
 from sklearn.model_selection import TimeSeriesSplit
@@ -78,6 +78,20 @@ relevant_columns = [col for col in df.columns if col.endswith(".13") or col in [
 df_relevant = df[relevant_columns]
 print("Número de columnas relevantes: ", len(df_relevant.columns))
 
+#Ahora calcularemos cual es la media de energía, el valor mínimo y el valor máximo:
+#Encontramos esta información relevante para evaluar como de bien van a estar los modelos observando el mrse y para ello el promedio
+#nos dará una pista de si ese mrse es bueno o no:
+maximo = df_relevant['energy'].max()
+minimo = df_relevant['energy'].min()
+promedio = df_relevant['energy'].mean()
+
+print("Máximo de la columna 'energía':", maximo)
+print("Mínimo de la columna 'energía':", minimo)
+print("Promedio de la columna 'energía':", promedio)
+
+#Nos da un máximo de 279255 y un mínimo de 1.
+#Por otro lado, el promedio es
+
 # Renombrado de columnas
 # Renombrar las columnas relevantes de manera más corta
 df_relevant = df_relevant.rename(columns={
@@ -109,6 +123,19 @@ df_relevant = df_relevant.rename(columns={
 
 print(df_relevant.head(6))
 
+df_relevant['datetime'] = pd.to_datetime(df_relevant['datetime'])
+
+# Extraer componentes relevantes
+df_relevant['year'] = df_relevant['datetime'].dt.year
+df_relevant['month'] = df_relevant['datetime'].dt.month
+df_relevant['day'] = df_relevant['datetime'].dt.day
+df_relevant['hour'] = df_relevant['datetime'].dt.hour
+
+#TODO Esto está bien?
+# Eliminar la columna original 'datetime'
+df_relevant = df_relevant.drop(columns=['datetime'])
+
+
 # TODO
 
 
@@ -133,57 +160,50 @@ La métrica que se va a usar es el rmse ya que nos parece la métrica más fáci
 de aquí en adelante cuando sea necesario. 
 
 Para este ejercicio, probaremos con 3 métodos de escalado (standard, Minmax y Robust) y escogeremos el que tenga el rmse más bajo:
-Para la outer evaluation usaremos el timesplit con 5 folds y para la inner evaluation usaremos timesplit con 3 folds para asegurarnos de que no hemos 
-tenido suerte a la hora de dividir entre la parte de test y train en cada "time series fold" del "outer loop".
+Para evitar tener suerte a la hora de splitear los datos, usaremos un cross validation que usará un inner_cv el cual es un 
+time series split con n = 3 para que al meterle al cross validation X e y, nos aseguremos tanto de que no vamos a evaluar algo en el pasado con 
+algo del futuro y además de no tener suerte al dividir en train y test
+
 Un problema puede ser el cómputo utilizado ya que la validación cruzada es más costosa
 TODO esto está bien explicado?
 
-No usaremos la outer evaluation para tomar una decisión. La mejor alternativa sobre qué método de escalado es mejor usar, la decidiremos en el inner loop.
+La mejor alternativa sobre qué método de escalado es mejor usar, la decidiremos observando las medias que salen de cada uno de los cross validation para 
+cada pipeline.
 
 """
-
-outer_cv = TimeSeriesSplit(n_splits=5)
 inner_cv = TimeSeriesSplit(n_splits=3)
-inner_rmse_means = [[], [], []]
+
+X,y = df_relevant.drop(columns=['energy']),df_relevant['energy']
+
 scores = {}
-#Primer alternativa: Standard:
-
-for train_index, test_index in outer_cv.split(df_relevant):
-    X_train, X_test = df_relevant.drop(columns=['energy']).iloc[train_index], df_relevant.drop(columns=['energy']).iloc[
-        test_index]
-    y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
-
-    pipeline_min_max = Pipeline([
+#Min max
+pipeline_min_max = Pipeline([
         ('scaler', MinMaxScaler()),
         ('knn', neighbors.KNeighborsRegressor())
     ])
 
-    pipeline_standard = Pipeline([
-        ('scaler', StandardScaler()),
-        ('knn', neighbors.KNeighborsRegressor())
-    ])
+scores_min_max = cross_val_score(pipeline_min_max,X,y,cv = inner_cv,scoring="neg_root_mean_squared_error")
+scores["MinMaxScaler"] = -np.mean(scores_min_max)
 
-    pipeline_robust = Pipeline([
-        ('scaler', RobustScaler()),
-        ('knn', neighbors.KNeighborsRegressor())
-    ])
+#Standard
+pipeline_standard = Pipeline([
+    ('scaler', StandardScaler()),
+    ('knn', neighbors.KNeighborsRegressor())
+])
 
-    inner_scores1 = cross_val_score(pipeline_min_max, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
-    inner_scores1_mean = -inner_scores1.mean()
-    inner_rmse_means[0].append(inner_scores1_mean)
+scores_std = cross_val_score(pipeline_standard,X,y,cv = inner_cv,scoring="neg_root_mean_squared_error")
+scores["StandardScaler"] = -np.mean(scores_std)
 
-    inner_scores2 = cross_val_score(pipeline_standard, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
-    inner_scores2_mean = -inner_scores2.mean()
-    inner_rmse_means[1].append(inner_scores2_mean)
+#Robust
+pipeline_robust = Pipeline([
+    ('scaler', RobustScaler()),
+    ('knn', neighbors.KNeighborsRegressor())
+])
 
-    inner_scores3 = cross_val_score(pipeline_robust, X_train, y_train, cv=inner_cv, scoring="neg_root_mean_squared_error")
-    inner_scores3_mean = -inner_scores3.mean()
-    inner_rmse_means[2].append(inner_scores3_mean)
+scores_robust = cross_val_score(pipeline_robust,X,y,cv = inner_cv,scoring="neg_root_mean_squared_error")
+scores["RobustScaler"] = -np.mean(scores_robust)
 
 
-scores["MinMaxScaler"] = np.mean(inner_rmse_means[0])
-scores["StandardScaler"] = np.mean(inner_rmse_means[1])
-scores["RobustScaler"] = np.mean(inner_rmse_means[2])
 print("Para MinMaxScaler, la media de rmse es: ",scores["MinMaxScaler"])
 print("Para Standard, la media de rmse es: ",scores["StandardScaler"])
 print("Para Robust, la media de rmse es: ",scores["RobustScaler"])
@@ -196,10 +216,10 @@ print("Para Robust, la media de rmse es: ",scores["RobustScaler"])
 
 """
 Como podemos observar en el print:
-Para MinMaxScaler, la media de rmse es:  553.7883988206586
-Para Standard, la media de rmse es:  487.38296471912935
-Para Robust, la media de rmse es:  487.43129008467366
-La media más baja para el rmse es la del Standard scaler por lo que usaremos ese escalador cuando usemos KNN regressor.
+Para MinMaxScaler, la media de rmse es:  545.1412378487257
+Para Standard, la media de rmse es:  479.37296174076965
+Para Robust, la media de rmse es:  461.2175957436966
+La media más baja para el rmse es la del Robust scaler por lo que usaremos ese escalador cuando usemos KNN regressor.
 """
 
 #TODO Qué diferencia hay entre cross validation y random o grid search CV
@@ -231,13 +251,45 @@ resultados? ¿Es posible extraer de alguna técnica qué atributos son más rele
 
 """
 4.a
-Usamos un for loop externo. Dentro, creamos una pipeline como modelo por cada uno 
-de los métodos (KNN, decision tree regresor...). De estos, hacemos una "inner" cross validation
-para sacar una media de cada uno de los outer folds y luego hacemos una media de 5 de cada media que ha salido
-de los outer folds.
+Para evaluar los modelos con hpo, haremos un cross validation con time series split de 3 con X e y y calcularemos la media del rmse de cada uno.
+Para ello, crearemos una pipeline con cada método (KNN, decision tree regresor...)
 De todas estas medias, las evaluamos y escogemos el modelo cuya media sea la mejor.
-Todo esto con el escalador standard.
+Todo esto con el escalador Robust.
+"""
 
+
+
+
+
+"""KNN por omisión"""
+X, y = df_relevant.drop(columns=['energy']), df_relevant['energy']
+inner_cv = TimeSeriesSplit(n_splits=3)
+
+# KNN con RobustScaler
+pipeline_KNN = Pipeline([
+    ('scaler', RobustScaler()),
+    ('knn', neighbors.KNeighborsRegressor())
+])
+scores_KNN_hpo = cross_val_score(pipeline_KNN, X, y, cv=inner_cv, scoring="neg_root_mean_squared_error")
+score_KNN = -np.mean(scores_KNN_hpo)
+
+print("Estimación de rendimiento de KNN con RobustScaler:", score_KNN)
+
+# Decision tree por omisión
+pipeline_Dec_tree = Pipeline([
+    ('decision_tree', DecisionTreeRegressor())
+])
+scores_Dec_tree_hpo = cross_val_score(pipeline_Dec_tree, X, y, cv=inner_cv, scoring="neg_root_mean_squared_error")
+score_Dec_tree = -np.mean(scores_Dec_tree_hpo)
+
+print("Estimación de rendimiento de Decision tree:", score_Dec_tree)
+
+# MODELO FINAL
+#modelo_final = pipeline_Robust.fit(X,y)
+
+
+
+"""
 4.b 
 Hacemos un outer loop y dentro usamos gridsearch con un param_grid ya definido y un inner también con 
 timeseries split para obtener el modelo con los mejores hiperparámetros. 
@@ -246,128 +298,33 @@ luego hacemos una media de las (k outer folds) y con esa media evaluamos todos l
 ajuste de hiperparámetros
 """
 
+#KNN sin omisión
 
 
-
-"""KNN por omisión"""
-X,y = df_relevant.drop(columns=['energy']),df_relevant['energy']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1/3, random_state=6) # TODO TimeSeries??
-pipeline_standard = Pipeline([
-        ('scaler', StandardScaler()),
-        ('knn', neighbors.KNeighborsRegressor())
-    ])
-pipeline_standard.fit(X_train, y_train)
-y_pred = pipeline_standard.predict(X_test)
-outer_score = metrics.mean_squared_error(y_test, y_pred)
-print("Estimación de rendimiento de KNN con RobustScaler", outer_score)
-
-# MODELO FINAL
-modelo_final = pipeline_standard.fit(X,y)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#class sklearn.model_selection.TimeSeriesSplit(n_splits=5, *, max_train_size=None, test_size=None, gap=0)
-
+#Decision tree sin omisión
 inicio = time.time()
 
-cv_outer = TimeSeriesSplit(n_splits=5)
+outer_cv = TimeSeriesSplit(n_splits=5)
+inner_cv = TimeSeriesSplit(n_splits=3)
 
-scores = []
+param_grid = {'max_depth': [2, 4, 6, 8, 10, 12, 14],
+ 'min_samples_split': [2, 4, 6, 8, 10, 12, 14]}
 
-# TODO ahora mismo solo es outer?
-for train_index, test_index in cv_outer.split(df_relevant):
-    X_train, X_test = df_relevant.drop(columns=['energy']).iloc[train_index], df_relevant.drop(columns=['energy']).iloc[test_index]
-    y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
+regr = GridSearchCV(DecisionTreeRegressor(random_state=1),
+                         param_grid,
+                         scoring='neg_root_mean_squared_error',
+                         # 3-fold for hyper-parameter tuning
+                         cv=inner_cv,
+                         n_jobs=1, verbose=1,
+                        )
 
-    """param_grid = {'knn__n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-                  'knn__metric': ['euclidean', 'manhattan', 'minkowski']}"""
-
-    pipe = Pipeline([
-        ('scaler', StandardScaler()), # TODO why MinMaxScaler?
-        ('knn', neighbors.KNeighborsRegressor())
-    ])
-
-    pipe.fit(X_train, y_train)
-    y_test_pred = pipe.predict(X_test)
-    rmse_knn = np.sqrt(metrics.mean_squared_error(y_test, y_test_pred))
-
-    scores.append(rmse_knn)
-
-score = np.array(scores)
-print("All RMSE: ", score)
-print("Mean accuracy: ", score.mean(),"+/-", score.std())
+scores = -cross_val_score(regr,
+                            X, y,
+                            scoring='neg_root_mean_squared_error',
+                            cv = outer_cv)
+media = np.mean(scores)
+print("Con optimización de hiperparámetros, para Decision tree la media del mrse es: ",media)
 
 fin = time.time()
 tiempo_transcurrido = fin - inicio
-print("Tiempo transcurrido en KNN regressor:", tiempo_transcurrido, "segundos")
-
-"DECISION TREE REGRESSOR"
-inicio = time.time()
-scores = []
-cv_outer = TimeSeriesSplit(n_splits=5)
-for train_index, test_index in cv_outer.split(df_relevant):
-    X_train, X_test = df_relevant.drop(columns=['energy']).iloc[train_index], df_relevant.drop(columns=['energy']).iloc[test_index]
-    y_train, y_test = df_relevant['energy'].iloc[train_index], df_relevant['energy'].iloc[test_index]
-
-    """param_grid = {'knn__n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-                  'knn__metric': ['euclidean', 'manhattan', 'minkowski']}"""
-
-    pipe = Pipeline([
-        ('decision_tree', DecisionTreeRegressor())]
-    )
-
-    pipe.fit(X_train, y_train)
-    y_test_pred = pipe.predict(X_test)
-    rmse_knn = np.sqrt(metrics.mean_squared_error(y_test, y_test_pred))
-    #Calcular el error cuadrático medio (RMSE) es correcto para un problema de regresión.
-
-    scores.append(rmse_knn)
-
-score = np.array(scores)
-print("All DECISION TREE RMSE: ", score)
-print("Mean accuracy: ", score.mean(),"+/-", score.std())
-
-fin = time.time()
-tiempo_transcurrido = fin - inicio
-print("Tiempo transcurrido en DECISION TREE regressor:", tiempo_transcurrido, "segundos")
-
-"Cross validation"
-X,y = df_relevant.drop(columns=['energy']),df_relevant['energy']
-X_train, X_test,y_train,y_test = train_test_split(X,y,test_size=1/3,random_state=42)
-inner = KFold(n_splits=3,shuffle=True,random_state=42)
-
-pipe = Pipeline([
-        ('scaler', MinMaxScaler()),
-        ('knn', neighbors.KNeighborsRegressor())
-    ])
-scores = cross_val_score(pipe,X_train,y_train,cv = inner,scoring = 'neg_root_mean_squared_error')
-print("Con cross validation",-scores)
+print("Tiempo transcurrido en DECISION TREE regressor con config de hiperparámetros:", tiempo_transcurrido, "segundos")
