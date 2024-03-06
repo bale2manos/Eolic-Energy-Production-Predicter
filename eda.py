@@ -109,20 +109,8 @@ df_relevant = df_relevant.rename(columns={
 
 print(df_relevant.head(6))
 
-# Convertir 'datetime' a tipo datetime
-df_relevant['datetime'] = pd.to_datetime(df_relevant['datetime'])
+# TODO
 
-# Extraer componentes relevantes
-df_relevant['year'] = df_relevant['datetime'].dt.year
-df_relevant['month'] = df_relevant['datetime'].dt.month
-df_relevant['day'] = df_relevant['datetime'].dt.day
-df_relevant['hour'] = df_relevant['datetime'].dt.hour
-
-#TODO Esto está bien?
-# Eliminar la columna original 'datetime'
-df_relevant = df_relevant.drop(columns=['datetime'])
-
-print(df_relevant.head(6))
 
 """
 2. Decidir cómo se va a llevar a cabo la evaluación outer (estimación de rendimiento futuro 
@@ -227,11 +215,12 @@ lineal (la normal y al menos, la variante Lasso) y SVM:
 a. Se evaluarán dichos modelos con sus hiperparámetros por omisión. También se medirán los 
 tiempos que tarda el entrenamiento. 
 b. Después, se ajustarán los hiperparámetros más importantes de cada método y se obtendrá 
-su evaluación. Medir tiempos del entrenamiento, ahora con HPO. 
+su evaluación. Medir tiempos del entrenamiento, ahora con HPO. --> ELEGIR UNO ENTRE GRID, ¡¡¡¡RANDOM!!!!! Y BAYESIAN
 c. 
 Obtener algunas conclusiones, tales como: ¿cuál es el mejor método? ¿Cuál de los métodos 
 básicos de aprendizaje automático es más rápido? ¿Los resultados son mejores que los 
-regresores triviales/naive/dummy? ¿El ajuste de hiperparámetros mejora con respecto a los 
+regresores triviales/naive/dummy --> media aritmetica / movil ? 
+¿El ajuste de hiperparámetros mejora con respecto a los 
 valores por omisión? ¿Hay algún equilibrio entre tiempo de ejecución y mejora de 
 resultados? ¿Es posible extraer de alguna técnica qué atributos son más relevantes? etc. 
 
@@ -382,47 +371,3 @@ pipe = Pipeline([
     ])
 scores = cross_val_score(pipe,X_train,y_train,cv = inner,scoring = 'neg_root_mean_squared_error')
 print("Con cross validation",-scores)
-
-
-
-"""
-
-# TODO ¿¿Outliers??
-
-
-# Detectar outliers
-def detect_outliers(df, n, features):
-    outlier_indices = []
-    for col in features:
-        if df[col].dtype not in [np.float64, np.int64]:
-            continue  # Skip datetime or non-numeric columns
-        Q1 = np.percentile(df[col], 25)
-        Q3 = np.percentile(df[col], 75)
-        IQR = Q3 - Q1
-        outlier_step = 1.5 * IQR
-        outlier_list_col = df[(df[col] < Q1 - outlier_step) | (df[col] > Q3 + outlier_step)].index
-        outlier_indices.extend(outlier_list_col)
-    outlier_indices = Counter(outlier_indices)
-    multiple_outliers = list(k for k, v in outlier_indices.items() if v > n)
-    return multiple_outliers
-
-
-outliers = detect_outliers(df_relevant, 2, df_relevant.columns)
-print("Número de outliers: ", len(outliers))
-
-# Visualización de outliers
-def plot_outliers(df, features):
-    for col in features:
-        plt.figure()
-        sns.boxplot(x=df[col])
-        plt.title(col)
-        plt.show()
-
-plot_outliers(df_relevant, df_relevant.columns)
-
-# Eliminación de outliers
-def remove_outliers(df, outliers):
-    df = df.drop(outliers, axis=0).reset_index(drop=True)
-    return df
-
-#df_relevant = remove_outliers(df_relevant, outliers)"""
