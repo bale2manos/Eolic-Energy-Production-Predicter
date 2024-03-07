@@ -121,6 +121,11 @@ df_relevant = df_relevant.rename(columns={
     'energy': 'energy'
 })
 
+#sns.relplot(data=df_relevant, x='surface_pressure', y='energy')
+sns.regplot(x="surface_pressure", y="energy", data=df_relevant)
+plt.show()
+print("··································")
+
 print(df_relevant.head(6))
 
 df_relevant['datetime'] = pd.to_datetime(df_relevant['datetime'])
