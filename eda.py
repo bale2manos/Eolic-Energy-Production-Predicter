@@ -1,7 +1,9 @@
 from collections import Counter
 import time
 from sklearn.preprocessing import StandardScaler
+from scipy.interpolate import make_interp_spline
 import pandas as pd
+import matplotlib.dates as mdates
 import numpy as np
 import seaborn as sns  # visualisation
 from sklearn.model_selection import train_test_split,cross_val_score,KFold,RandomizedSearchCV,GridSearchCV
@@ -137,8 +139,91 @@ df_relevant['day'] = df_relevant['datetime'].dt.day
 df_relevant['hour'] = df_relevant['datetime'].dt.hour
 
 #TODO Esto está bien?
-# Eliminar la columna original 'datetime'
+# Ensure 'datetime' column is in datetime format
+# Ensure 'datetime' column is in datetime format
+df_relevant['datetime'] = pd.to_datetime(df_relevant['datetime'])
+
+# Find the range of dates
+min_date = df_relevant['datetime'].min()
+max_date = df_relevant['datetime'].max()
+
+# Extract unique dates from the datetime column
+unique_dates_with_measurements = df_relevant['datetime'].dt.date.unique()
+
+# Generate a range of dates within the specified range
+date_range = pd.date_range(min_date, max_date, freq='D')
+
+# Identify the missing dates
+missing_dates = set(date_range.date) - set(unique_dates_with_measurements)
+
+# Convert missing dates to DataFrame
+missing_dates_df = pd.DataFrame({'missing_dates': list(missing_dates)})
+
+# Sort the DataFrame by 'missing_dates' column
+missing_dates_df['missing_dates'] = pd.to_datetime(missing_dates_df['missing_dates'])
+missing_dates_df = missing_dates_df.sort_values(by='missing_dates')
+
+# Display the missing dates
+print("Days with no measurements:")
+print(missing_dates_df)
+
+
+# MISSING MONTHS
+
+
+
+
+
+# Assuming measurements_per_day is a DataFrame with datetime and measurement_count columns
+measurements_per_day = df_relevant.groupby(df_relevant['datetime'].dt.date).size().reset_index(name='measurement_count')
+# Create a continuous date range spanning the entire period
+full_date_range = pd.date_range(start=measurements_per_day['datetime'].min(), end=measurements_per_day['datetime'].max(), freq='D')
+
+# Convert the "datetime" column in the original DataFrame to datetime data type
+measurements_per_day['datetime'] = pd.to_datetime(measurements_per_day['datetime'])
+
+# Merge with the actual data and fill missing values with 0
+measurements_per_day = pd.DataFrame({'datetime': full_date_range}).merge(measurements_per_day, on='datetime', how='left').fillna(0)
+
+# Set the style for Seaborn
+sns.set(style="whitegrid")
+
+# Plot the raw data
+plt.figure(figsize=(12, 6))
+sns.lineplot(x='datetime', y='measurement_count', data=measurements_per_day, color='blue', label='Raw Data')
+
+# Adding labels and title
+plt.title('Number of Measurements per Day (Raw Data)')
+plt.xlabel('Date')
+plt.ylabel('Number of Measurements')
+
+plt.legend()
+plt.show()
+
+
+# Smooth the data with a rolling average
+window_size = 7  # You can adjust the window size based on your preference
+measurements_per_day['measurement_count_smoothed'] = measurements_per_day['measurement_count'].rolling(window=window_size).mean()
+
+# Plot the smoothed line using Seaborn
+plt.figure(figsize=(12, 6))
+sns.lineplot(x='datetime', y='measurement_count_smoothed', data=measurements_per_day, color='blue', label='Smoothed Line')
+
+# Adding labels and title
+plt.title('Number of Measurements per Day (Smoothed)')
+plt.xlabel('Date')
+plt.ylabel('Number of Measurements')
+
+plt.legend()
+plt.show()
+
+
+
+
 df_relevant = df_relevant.drop(columns=['datetime'])
+
+
+
 
 
 # TODO
@@ -289,6 +374,7 @@ score_Dec_tree = -np.mean(scores_Dec_tree_hpo)
 
 print("Estimación de rendimiento de Decision tree:", score_Dec_tree)
 
+
 # MODELO FINAL
 #modelo_final = pipeline_Robust.fit(X,y)
 
@@ -315,6 +401,7 @@ inner_cv = TimeSeriesSplit(n_splits=3)
 param_grid = {'max_depth': [2, 4, 6, 8, 10, 12, 14],
  'min_samples_split': [2, 4, 6, 8, 10, 12, 14]}
 
+
 regr = GridSearchCV(DecisionTreeRegressor(random_state=1),
                          param_grid,
                          scoring='neg_root_mean_squared_error',
@@ -322,11 +409,20 @@ regr = GridSearchCV(DecisionTreeRegressor(random_state=1),
                          cv=inner_cv,
                          n_jobs=1, verbose=1,
                         )
+regr.fit(X, y) # TIENE QUE SER TRAIN TODO
+print("---------------------------")
+print(regr.best_estimator_)
+print(regr.best_params_)
+
 
 scores = -cross_val_score(regr,
                             X, y,
                             scoring='neg_root_mean_squared_error',
                             cv = outer_cv)
+
+
+print("BEST PARAMS ARE: ", regr.best_params_)
+print("BEST SCORE IS: ", regr.best_score_)
 media = np.mean(scores)
 print("Con optimización de hiperparámetros, para Decision tree la media del mrse es: ",media)
 
